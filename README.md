@@ -26,7 +26,7 @@ https://vimm.net/vault/7970
 https://vimm.net/vault/8000
 ```
 
-Then, run the script:
+Create two folders in this script root, one named `downloading` to store temp files, and other named `finished`to store extracted files. Then, run the script:
 
 ```bash
 python3 run.py
