@@ -2,7 +2,7 @@
 
 ## Description
 
-This is a simple script to download all the files you want from Vimm's Lair. It uses the `requests` library to make HTTP requests and `BeautifulSoup` to parse HTML. The script downloads all the files from the specified page and saves them to a local directory. It also extracts them to a specified directory to avoid duplicates.
+This is a simple script to download and extract files from Vimm's Lair. It uses the `requests` library to make HTTP requests, `BeautifulSoup` to parse HTML, and `Selenium` to handle JavaScript content. The script downloads all the files from the specified page and saves them to a local directory. It also extracts them to a specified directory to avoid duplicates.
 
 ## Requirements
 
@@ -26,7 +26,7 @@ https://vimm.net/vault/7970
 https://vimm.net/vault/8000
 ```
 
-Create two folders in this script root, one named `downloading` to store temp files, and other named `finished`to store extracted files. Then, run the script:
+Create three folders in this script root, one named `downloading` to store temp files, one named `finished`to store downloaded files, and one named `extracted` to store extracted files. Then, run the script:
 
 ```bash
 python3 run.py
