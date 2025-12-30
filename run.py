@@ -10,6 +10,9 @@ from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.support.ui import Select
 
+PREFER_ALTERNATE_FORMAT = True
+DOWNLOAD_LATEST_VERSION = True
+
 def get_media(url):
     print("Getting media information...")
     print(url)
@@ -18,6 +21,7 @@ def get_media(url):
     dl_versions_num = 0
 
     response = requests.get(url, verify=False)
+
     if response.status_code == 200:
         soup = BeautifulSoup(response.text, 'html.parser')
 
@@ -29,7 +33,7 @@ def get_media(url):
         if dl_version_dd:
             dl_versions_num = len(dl_version_dd.find_all('option'))
 
-        if dl_versions_num > 1:
+        if dl_versions_num > 1 and DOWNLOAD_LATEST_VERSION:
             driver = webdriver.Firefox()
             driver.get(url)
 
@@ -45,13 +49,13 @@ def get_media(url):
             soup = BeautifulSoup(driver.page_source, 'html.parser')
             driver.quit()
 
-    media_id_element = soup.find('input', {'name': 'mediaId'})
-    url_element = soup.find('form', {'id': 'dl_form'})
+        media_id_element = soup.find('input', {'name': 'mediaId'})
+        url_element = soup.find('form', {'id': 'dl_form'})
 
-    if media_id_element:
-        media_id = media_id_element['value']
-        url = url_element['action']
-        return {'id': media_id, 'url': url, 'formats': dl_formats_num}
+        if media_id_element:
+            media_id = media_id_element['value']
+            url = url_element['action']
+            return {'id': media_id, 'url': url, 'formats': dl_formats_num}
     else:
         print("Unable to find media")
         return None
@@ -59,7 +63,7 @@ def get_media(url):
 def download(media):
     downloadUrl = "https:" + media['url'] + "?mediaId=" + media['id']
     
-    if media['formats'] > 1:
+    if media['formats'] > 1 and PREFER_ALTERNATE_FORMAT:
         downloadUrl += "&alt=1"
     
     print(downloadUrl)
