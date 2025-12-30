@@ -1,32 +1,67 @@
 import requests
-from tqdm import tqdm
-from bs4 import BeautifulSoup
 import os
 import zipfile
 import py7zr
 import re
+import shutil
+import multiprocessing
+from tqdm import tqdm
+from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.support.ui import Select
 
 def get_media(url):
     print("Getting media information...")
     print(url)
+
+    dl_formats_num = 0
+    dl_versions_num = 0
+
     response = requests.get(url, verify=False)
     if response.status_code == 200:
         soup = BeautifulSoup(response.text, 'html.parser')
-        media_id_element = soup.find('input', {'name': 'mediaId'})
-        url_element = soup.find('form', {'id': 'dl_form'})
-        if media_id_element:
-            media_id = media_id_element['value']
-            url = url_element['action']
-            return {'id': media_id, 'url': url}
-        else:
-            print("Unable to find media")
-            return None
+
+        dl_format_dd = soup.find('select', {'id': 'dl_format'})
+        if dl_format_dd:
+            dl_formats_num = len(dl_format_dd.find_all('option'))
+
+        dl_version_dd = soup.find('select', {'id': 'dl_version'})
+        if dl_version_dd:
+            dl_versions_num = len(dl_version_dd.find_all('option'))
+
+        if dl_versions_num > 1:
+            driver = webdriver.Firefox()
+            driver.get(url)
+
+            # dl_format_dd = driver.find_element('id', 'dl_format')
+            dl_version_dd = driver.find_element('id', 'dl_version')
+
+            # dl_format_select = Select(dl_format_dd)
+            dl_version_select = Select(dl_version_dd)
+
+            # dl_format_select.select_by_index(len(dl_format_select.options) - 1)
+            dl_version_select.select_by_index(len(dl_version_select.options) - 1)
+
+            soup = BeautifulSoup(driver.page_source, 'html.parser')
+            driver.quit()
+
+    media_id_element = soup.find('input', {'name': 'mediaId'})
+    url_element = soup.find('form', {'id': 'dl_form'})
+
+    if media_id_element:
+        media_id = media_id_element['value']
+        url = url_element['action']
+        return {'id': media_id, 'url': url, 'formats': dl_formats_num}
     else:
-        print("Error getting media:", response.status_code)
+        print("Unable to find media")
         return None
 
 def download(media):
     downloadUrl = "https:" + media['url'] + "?mediaId=" + media['id']
+    
+    if media['formats'] > 1:
+        downloadUrl += "&alt=1"
+    
     print(downloadUrl)
     headers = {
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
@@ -63,39 +98,49 @@ def download(media):
                             file.write(chunk)
                             pbar.update(len(chunk))
             print("Download finished!")
-            extract_dir = os.path.join("finished")
-            if extract_and_delete(file_path, extract_dir):
-                print(f"Successfully extracted and deleted {file_path}")
-            else:
-                print(f"Failed to extract or delete {file_path}")
+            finished_dir = os.path.join("finished")
+
+            os.makedirs(finished_dir, exist_ok=True)
+            shutil.move(file_path, os.path.join(finished_dir, filename))
+            return os.path.join(finished_dir, filename)
         else:
             print("Error downloading media:", response.text, response.status_code)
-        return response.status_code
-    
-
-def extract_and_delete(archive_path, extract_dir):
-    try:
-        os.makedirs(extract_dir, exist_ok=True)
-        if archive_path.endswith('.zip'):
-            with zipfile.ZipFile(archive_path, 'r') as zip_ref:
-                zip_ref.extractall(extract_dir)
-                print(f"Extracted zip: {archive_path} to {extract_dir}")
-        elif archive_path.endswith('.7z'):
-            with py7zr.SevenZipFile(archive_path, 'r') as seven_zip:
-                seven_zip.extractall(extract_dir)
-                print(f"Extracted 7z: {archive_path} to {extract_dir}")
-        else:
-            print(f"Unsupported file format: {archive_path}")
-            return False
         
-        os.remove(archive_path)
-        print(f"Deleted original file: {archive_path}")
-        return True
-    except Exception as e:
-        print(f"Error extracting {archive_path}: {e}")
-        return False
+        response.close()
+        return response.status_code
 
-def download_from_txt(file):
+def extract_and_delete(records):
+    while True:
+        if records:
+            archive_path = records.pop(0)
+            extract_dir = os.path.join("extracted")
+
+            try:
+                os.makedirs(extract_dir, exist_ok=True)
+
+                if archive_path.endswith('.zip'):
+                    with zipfile.ZipFile(archive_path, 'r') as zip_ref:
+                        zip_ref.extractall(extract_dir)
+                        print(f"Extracted zip: {archive_path} to {extract_dir}")
+
+                    os.remove(archive_path)
+                    print(f"Deleted original file: {archive_path}")
+                elif archive_path.endswith('.7z'):
+                    with py7zr.SevenZipFile(archive_path, 'r') as seven_zip:
+                        seven_zip.extractall(extract_dir)
+                        print(f"Extracted 7z: {archive_path} to {extract_dir}")
+                        
+                    os.remove(archive_path)
+                    print(f"Deleted original file: {archive_path}")
+                elif archive_path == "END":
+                    print("Extraction process ending.")
+                    break
+                else:
+                    print(f"Unsupported message received: {archive_path}")
+            except Exception as e:
+                print(f"Error extracting {archive_path}: {e}")
+
+def download_from_txt(records, file):
     with open(file, 'r') as f:
         lines = f.readlines()
         for line in lines:
@@ -104,8 +149,23 @@ def download_from_txt(file):
             media = get_media(url)
             if media:
                 print(f"Media found: {media['id']} {media['url']}")
-                download(media)
+                records.append(download(media))
             else:
                 print(f"Media not found")
 
-download_from_txt("links.txt")
+    records.append("END")
+
+if __name__ == "__main__":
+    with multiprocessing.Manager() as manager:
+        # creating a list in server process memory
+        records = manager.list([])
+
+        # creating new processes
+        p1 = multiprocessing.Process(target=download_from_txt, args=(records, "links.txt"))
+        p2 = multiprocessing.Process(target=extract_and_delete, args=(records,))
+
+        p1.start()
+        p2.start()
+
+        p1.join()
+        p2.join()
