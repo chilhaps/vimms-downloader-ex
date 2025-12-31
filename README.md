@@ -32,4 +32,4 @@ Create three folders in this script root, one named `downloading` to store temp 
 python3 run.py
 ```
 
-That's it! The script will download all the files from the specified pages and save them to "downloading" folder, then extract to "finished" folder and delete the compressed file.
+That's it! The script will download all the files from the specified pages and save them to "finished" folder, then extract to "extracted" folder and delete the compressed file.
