@@ -110,7 +110,6 @@ def download(media):
         else:
             print("Error downloading media:", response.text, response.status_code)
         
-        response.close()
         return response.status_code
 
 def extract_and_delete(records):
